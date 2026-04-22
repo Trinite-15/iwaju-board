@@ -31,7 +31,7 @@ const sessionId = getSessionId();
 // COMPOSANT PRINCIPAL
 // ─────────────────────────────────────────────
 function App() {
-  const param = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(window.location.search);
   const isMobile = params.get('mode') =='mobile';
   const urlSession =params.get('session');
   if (isMobile && urlSession){
