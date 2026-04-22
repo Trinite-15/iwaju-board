@@ -2,7 +2,7 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 function QRPanel({ sessionId }) {
-  const mobileUrl = `https://vercel.com/trinite-15s-projects/iwaju-board/HM7zKHd2Anx8FLJJA9CGrKYKZPf9/?session=${sessionId}`;
+  const mobileUrl = `https://iwaju-board.vercel.app/?session=${sessionId}`;
 
   return (
     <div style={{
