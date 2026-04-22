@@ -1,0 +1,96 @@
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  position: relative; /* Nécessaire pour positionner la toolbar par-dessus */
+}
+
+canvas {
+  touch-action: none; /* TRÈS IMPORTANT : empêche le zoom/scroll du téléphone pendant le dessin */
+  cursor: crosshair;
+  display: block;     /* Évite l'espace blanc sous le canvas (comportement inline par défaut) */
+}
+
+/* ===== BARRE D'OUTILS ===== */
+.toolbar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(30, 30, 30, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50px;
+  padding: 10px 20px;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.toolbar label {
+  color: #aaa;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+/* Sélecteur de couleur */
+.color-picker {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  cursor: pointer;
+  padding: 0;
+  background: none;
+  overflow: hidden;
+}
+
+/* Sélecteur d'épaisseur */
+.size-slider {
+  width: 80px;
+  accent-color: white;
+  cursor: pointer;
+}
+
+/* Bouton Clear */
+.btn-clear {
+  background: rgba(220, 50, 50, 0.2);
+  color: #ff6b6b;
+  border: 1px solid rgba(220, 50, 50, 0.4);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-family: monospace;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-clear:hover {
+  background: rgba(220, 50, 50, 0.4);
+}
+
+/* ===== BADGE DE STATUT DE CONNEXION ===== */
+.status-badge {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  font-size: 11px;
+  font-family: monospace;
+  padding: 4px 10px;
+  border-radius: 20px;
+  z-index: 100;
+}
+
+.status-badge.connected {
+  background: rgba(0, 200, 100, 0.15);
+  color: #00c864;
+  border: 1px solid rgba(0, 200, 100, 0.3);
+}
+
+.status-badge.connecting {
+  background: rgba(255, 200, 0, 0.15);
+  color: #ffc800;
+  border: 1px solid rgba(255, 200, 0, 0.3);
+}

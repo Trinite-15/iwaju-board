@@ -1,0 +1,10 @@
+:root {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Empêche le scroll pendant qu'on dessine */
+}
+
+body {
+  margin: 0;
+  background-color: #1a1a1a;
+}
