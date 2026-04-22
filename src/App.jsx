@@ -1,4 +1,4 @@
-
+import MobileDrawer from './MobileDrawer.jsx';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import './App.css';
@@ -31,6 +31,12 @@ const sessionId = getSessionId();
 // COMPOSANT PRINCIPAL
 // ─────────────────────────────────────────────
 function App() {
+  const param = new URLSearchParams(window.location.search);
+  const isMobile = params.get('mode') =='mobile';
+  const urlSession =params.get('session');
+  if (isMobile && urlSession){
+    return <MobileDrawer sessionId ={urlSession} />
+  }
   const canvasRef    = useRef(null);
   const isDrawing    = useRef(false);
   const pointQueue   = useRef([]);       // File d'attente pour requestAnimationFrame
