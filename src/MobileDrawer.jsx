@@ -41,17 +41,36 @@ function MobileDrawer({ sessionId }) {
       y: clientY / window.innerHeight,
     });
 
+    const ctx = canvas.getContext('2d');
+    ctx.lineCap  = 'round';
+    ctx.lineJoin = 'round';
+
     const sendPoint = (type, clientX, clientY) => {
       const normalized = clientX !== undefined ? normalize(clientX, clientY) : {};
+  
+      const color = eraserRef.current ? '#1a1a1a' : colorRef.current;
+      const size  = eraserRef.current ? sizeRef.current * 4 : sizeRef.current;
+
+      // Dessiner localement sur le canvas du téléphone
+      if (type === 'start' && clientX !== undefined) {
+          ctx.beginPath();
+          ctx.moveTo(clientX, clientY);
+          ctx.strokeStyle = color;
+          ctx.lineWidth   = size;
+      }   else if (type === 'move' && clientX !== undefined) {
+          ctx.lineTo(clientX, clientY);
+          ctx.stroke();
+      }   else if (type === 'end') {
+          ctx.closePath();
+      }   else if (type === 'clear') {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Envoyer sur Supabase pour le PC
       channel.send({
-        type: 'broadcast',
-        event: 'draw',
-        payload: {
-          type,
-          ...normalized,
-          color: eraserRef.current ? '#1a1a1a' : colorRef.current,
-          size:  eraserRef.current ? sizeRef.current * 4 : sizeRef.current,
-        },
+         type: 'broadcast',
+         event: 'draw',
+         payload: { type, ...normalized, color, size },
       });
     };
 
