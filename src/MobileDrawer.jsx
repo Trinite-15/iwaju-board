@@ -107,14 +107,21 @@ function MobileDrawer({ sessionId }) {
   }, [sessionId]);
 
   const handleClear = () => {
-    if (channelRef.current) {
-      channelRef.current.send({
-        type: 'broadcast',
-        event: 'draw',
-        payload: { type: 'clear' },
-      });
-    }
-  };
+      // Effacer localement sur le téléphone
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Envoyer l'ordre au PC
+      if (channelRef.current) {
+          channelRef.current.send({
+           type: 'broadcast',
+           event: 'draw',
+           payload: { type: 'clear' },
+          });
+        }
+    };
+
 
   return (
     <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a', position: 'relative' }}>
