@@ -3,7 +3,7 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 function QRPanel({ sessionId }) {
-  const productionUrl = https://iwaju-board.vercel.app/';
+  const productionUrl = 'https://iwaju-board.vercel.app/';
   const isLocal = window.location.hostname === 'localhost';
   const base = isLocal ? productionUrl : window.location.origin;
   const mobileUrl = `${base}/?mode=mobile&session=${sessionId}`;
