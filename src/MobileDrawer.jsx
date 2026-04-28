@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import logger from './logger.js';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -27,11 +28,35 @@ function MobileDrawer({ sessionId }) {
     const canvas = canvasRef.current;
     canvas.width  = window.innerWidth;
     canvas.height = window.innerHeight;
+    // Gérer la rotation du téléphone
+   
+    const handleResize = () => {
+      logger.info('Rotation détectée', {
+        orientation: window.innerWidth > window.innerHeight ? 'paysage' : 'portrait',
+        size: `${window.innerWidth}x${window.innerHeight}`,
+      });
+    // Sauvegarder l'image avant resize
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+  
+  // Restaurer l'image
+      ctx.putImageData(imageData, 0, 0);
+      ctx.lineCap  = 'round';
+      ctx.lineJoin = 'round';
+    };
+
+    window.addEventListener('resize', handleResize);
+    
+
+
 
     const channel = supabase
       .channel(`board-${sessionId}`)
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') setConnected(true);
+        logger.info('Mobile connecté', { sessionId });
       });
 
     channelRef.current = channel;
@@ -99,6 +124,7 @@ function MobileDrawer({ sessionId }) {
     canvas.addEventListener('touchend',   onTouchEnd);
 
     return () => {
+      window.removeEventListener('resize', handleResize);
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove',  onTouchMove);
       canvas.removeEventListener('touchend',   onTouchEnd);

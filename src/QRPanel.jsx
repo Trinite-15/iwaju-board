@@ -3,7 +3,9 @@ import React from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 function QRPanel({ sessionId }) {
-  const base = window.location.origin;
+  const productionUrl = https://iwaju-board.vercel.app/';
+  const isLocal = window.location.hostname === 'localhost';
+  const base = isLocal ? productionUrl : window.location.origin;
   const mobileUrl = `${base}/?mode=mobile&session=${sessionId}`;
 
   return (
@@ -17,8 +19,12 @@ function QRPanel({ sessionId }) {
       <p style={{ color: '#888', fontSize: 10, margin: '8px 0 0', fontFamily: 'monospace' }}>
         Scanne avec ton téléphone
       </p>
+      <p style={{ color: '#555', fontSize: 9, margin: '4px 0 0', fontFamily: 'monospace' }}>
+        Session : {sessionId}
+      </p>
     </div>
   );
 }
 
 export default QRPanel;
+
