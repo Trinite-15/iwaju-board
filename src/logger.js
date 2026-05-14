@@ -1,5 +1,4 @@
-// src/logger.js
-// Système de logs pour identifier les erreurs en production
+// logger.js — Système de suivi des erreurs (type Sentry)
 
 const LOG_LEVELS = {
   INFO:  '📋 INFO',
@@ -7,7 +6,7 @@ const LOG_LEVELS = {
   ERROR: '🔴 ERROR',
 };
 
-const logs = []; // Stockage en mémoire des logs
+const logs = [];
 
 const logger = {
   info: (message, data = {}) => {
@@ -18,7 +17,7 @@ const logger = {
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       screen: `${window.innerWidth}x${window.innerHeight}`,
-      dpr: window.devicePixelRatio,
+      dpr: window.devicePixelRatio || 1,
     };
     logs.push(entry);
     console.log(`${entry.level} | ${entry.timestamp} | ${message}`, data);
@@ -46,13 +45,12 @@ const logger = {
       timestamp: new Date().toISOString(),
       userAgent: navigator.userAgent,
       screen: `${window.innerWidth}x${window.innerHeight}`,
-      dpr: window.devicePixelRatio,
+      dpr: window.devicePixelRatio || 1,
     };
     logs.push(entry);
     console.error(`${entry.level} | ${entry.timestamp} | ${message}`, error);
   },
 
-  // Exporter tous les logs (utile pour déboguer à distance)
   export: () => {
     const blob = new Blob(
       [JSON.stringify(logs, null, 2)],
@@ -63,18 +61,19 @@ const logger = {
     a.href     = url;
     a.download = `iwaju-logs-${Date.now()}.json`;
     a.click();
+    URL.revokeObjectURL(url);
   },
 
   getLogs: () => logs,
 };
 
-// Capturer automatiquement les erreurs non gérées
+// Capture automatique des erreurs non gérées
 window.addEventListener('error', (e) => {
-  logger.error('Erreur non gérée', e.error);
+  logger.error('Erreur non gérée', e.error || e.message);
 });
 
 window.addEventListener('unhandledrejection', (e) => {
   logger.error('Promise rejetée', e.reason);
 });
 
-export default logger
+export default logger;

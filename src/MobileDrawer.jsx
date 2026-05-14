@@ -8,97 +8,105 @@ const supabase = createClient(
 );
 
 function MobileDrawer({ sessionId }) {
-  const canvasRef   = useRef(null);
-  const isDrawing   = useRef(false);
-  const channelRef  = useRef(null);
-  const colorRef    = useRef('#ffffff');
-  const sizeRef     = useRef(6);
-  const eraserRef   = useRef(false);
+  const canvasRef  = useRef(null);
+  const isDrawing  = useRef(false);
+  const channelRef = useRef(null);
+  const colorRef   = useRef('#ffffff');
+  const sizeRef    = useRef(6);
+  const eraserRef  = useRef(false);
 
-  const [color, setColor]       = useState('#ffffff');
-  const [size, setSize]         = useState(6);
+  const [color, setColor]           = useState('#ffffff');
+  const [size, setSize]             = useState(6);
   const [eraserMode, setEraserMode] = useState(false);
   const [connected, setConnected]   = useState(false);
 
-  useEffect(() => { colorRef.current  = color; },      [color]);
-  useEffect(() => { sizeRef.current   = size; },       [size]);
+  useEffect(() => { colorRef.current  = color;      }, [color]);
+  useEffect(() => { sizeRef.current   = size;       }, [size]);
   useEffect(() => { eraserRef.current = eraserMode; }, [eraserMode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    canvas.width  = window.innerWidth;
-    canvas.height = window.innerHeight;
-    // Gérer la rotation du téléphone
-   
-    const handleResize = () => {
-      logger.info('Rotation détectée', {
-        orientation: window.innerWidth > window.innerHeight ? 'paysage' : 'portrait',
-        size: `${window.innerWidth}x${window.innerHeight}`,
-      });
-    // Sauvegarder l'image avant resize
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  
+    const ctx    = canvas.getContext('2d');
+
+    // Dimensionner le canvas selon l'écran actuel
+    const initCanvas = () => {
       canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
-  
-  // Restaurer l'image
-      ctx.putImageData(imageData, 0, 0);
       ctx.lineCap  = 'round';
       ctx.lineJoin = 'round';
     };
 
+    initCanvas();
+
+    // ── Gestion rotation paysage/portrait ──────────────────
+    const handleResize = () => {
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      ctx.putImageData(imageData, 0, 0);
+      ctx.lineCap  = 'round';
+      ctx.lineJoin = 'round';
+
+      logger.info('Rotation détectée', {
+        orientation: window.innerWidth > window.innerHeight ? 'paysage' : 'portrait',
+        size: `${window.innerWidth}x${window.innerHeight}`,
+      });
+    };
+
     window.addEventListener('resize', handleResize);
-    
 
-
-
+    // ── Canal Supabase ─────────────────────────────────────
     const channel = supabase
       .channel(`board-${sessionId}`)
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') setConnected(true);
-        logger.info('Mobile connecté', { sessionId });
+        if (status === 'SUBSCRIBED') {
+          setConnected(true);
+          logger.info('Mobile connecté', { sessionId });
+        }
       });
 
     channelRef.current = channel;
 
+    // ── Normalisation ──────────────────────────────────────
     const normalize = (clientX, clientY) => ({
       x: clientX / window.innerWidth,
       y: clientY / window.innerHeight,
     });
 
-    const ctx = canvas.getContext('2d');
-    ctx.lineCap  = 'round';
-    ctx.lineJoin = 'round';
-
+    // ── Envoi d'un point + dessin local ───────────────────
     const sendPoint = (type, clientX, clientY) => {
       const normalized = clientX !== undefined ? normalize(clientX, clientY) : {};
-  
       const color = eraserRef.current ? '#1a1a1a' : colorRef.current;
       const size  = eraserRef.current ? sizeRef.current * 4 : sizeRef.current;
 
-      // Dessiner localement sur le canvas du téléphone
+      // Dessin local immédiat sur le téléphone
       if (type === 'start' && clientX !== undefined) {
-          ctx.beginPath();
-          ctx.moveTo(clientX, clientY);
-          ctx.strokeStyle = color;
-          ctx.lineWidth   = size;
-      }   else if (type === 'move' && clientX !== undefined) {
-          ctx.lineTo(clientX, clientY);
-          ctx.stroke();
-      }   else if (type === 'end') {
-          ctx.closePath();
-      }   else if (type === 'clear') {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.beginPath();
+        ctx.moveTo(clientX, clientY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth   = size;
+        ctx.lineCap     = 'round';
+        ctx.lineJoin    = 'round';
+      } else if (type === 'move' && clientX !== undefined) {
+        ctx.lineTo(clientX, clientY);
+        ctx.stroke();
+      } else if (type === 'end') {
+        ctx.closePath();
+      } else if (type === 'clear') {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Envoyer sur Supabase pour le PC
+      // Envoi vers le PC via Supabase
       channel.send({
-         type: 'broadcast',
-         event: 'draw',
-         payload: { type, ...normalized, color, size },
+        type: 'broadcast',
+        event: 'draw',
+        payload: { type, ...normalized, color, size },
       });
     };
 
+    // ── Événements tactiles ────────────────────────────────
     const onTouchStart = (e) => {
       e.preventDefault();
       isDrawing.current = true;
@@ -123,34 +131,34 @@ function MobileDrawer({ sessionId }) {
     canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
     canvas.addEventListener('touchend',   onTouchEnd);
 
+    // ── Cleanup ────────────────────────────────────────────
     return () => {
-      window.removeEventListener('resize', handleResize);
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove',  onTouchMove);
       canvas.removeEventListener('touchend',   onTouchEnd);
+      window.removeEventListener('resize',     handleResize);
       channel.unsubscribe();
     };
   }, [sessionId]);
 
+  // ── Bouton effacer tout ────────────────────────────────
   const handleClear = () => {
-      // Effacer localement sur le téléphone
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const canvas = canvasRef.current;
+    const ctx    = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Envoyer l'ordre au PC
-      if (channelRef.current) {
-          channelRef.current.send({
-           type: 'broadcast',
-           event: 'draw',
-           payload: { type: 'clear' },
-          });
-        }
-    };
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'draw',
+        payload: { type: 'clear' },
+      });
+    }
+  };
 
-
+  // ── Rendu ──────────────────────────────────────────────
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a', position: 'relative' }}>
+    <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a', position: 'relative', overflow: 'hidden' }}>
 
       {/* Badge connexion */}
       <div style={{
@@ -164,22 +172,33 @@ function MobileDrawer({ sessionId }) {
         {connected ? '● Connecté' : '○ Connexion…'}
       </div>
 
-      {/* Zone de dessin — prend tout l'écran */}
+      {/* Canvas plein écran */}
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', width: '100vw', height: '100vh', touchAction: 'none' }}
+        style={{
+          display: 'block',
+          width: '100vw',
+          height: '100vh',
+          touchAction: 'none',
+        }}
       />
 
-      {/* Toolbar mobile — compacte et bien dimensionnée */}
+      {/* Toolbar mobile compacte */}
       <div style={{
-        position: 'fixed', bottom: 24, left: '50%',
+        position: 'fixed',
+        bottom: 24,
+        left: '50%',
         transform: 'translateX(-50%)',
-        display: 'flex', alignItems: 'center', gap: 16,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
         background: 'rgba(20,20,20,0.92)',
         backdropFilter: 'blur(12px)',
         border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 60, padding: '14px 24px',
-        zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        borderRadius: 60,
+        padding: '12px 20px',
+        zIndex: 100,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
       }}>
 
         {/* Couleur */}
@@ -188,17 +207,23 @@ function MobileDrawer({ sessionId }) {
           value={color}
           onChange={(e) => setColor(e.target.value)}
           style={{
-            width: 44, height: 44, borderRadius: '50%',
+            width: 40, height: 40,
+            borderRadius: '50%',
             border: '2px solid rgba(255,255,255,0.3)',
-            cursor: 'pointer', padding: 0, background: 'none',
+            cursor: 'pointer',
+            padding: 0,
+            background: 'none',
           }}
         />
 
         {/* Épaisseur */}
         <input
-          type="range" min={2} max={30} value={size}
+          type="range"
+          min={2}
+          max={30}
+          value={size}
           onChange={(e) => setSize(Number(e.target.value))}
-          style={{ width: 90, accentColor: 'white' }}
+          style={{ width: 80, accentColor: 'white' }}
         />
 
         {/* Gomme */}
@@ -208,8 +233,11 @@ function MobileDrawer({ sessionId }) {
             background: eraserMode ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.05)',
             color: 'white',
             border: `1px solid ${eraserMode ? 'white' : 'rgba(255,255,255,0.2)'}`,
-            borderRadius: 30, padding: '10px 18px',
-            fontSize: 14, cursor: 'pointer', fontFamily: 'monospace',
+            borderRadius: 30,
+            padding: '8px 16px',
+            fontSize: 14,
+            cursor: 'pointer',
+            fontFamily: 'monospace',
           }}
         >
           {eraserMode ? '✏️' : '◻️'}
@@ -222,8 +250,10 @@ function MobileDrawer({ sessionId }) {
             background: 'rgba(220,50,50,0.2)',
             color: '#ff6b6b',
             border: '1px solid rgba(220,50,50,0.4)',
-            borderRadius: 30, padding: '10px 18px',
-            fontSize: 14, cursor: 'pointer',
+            borderRadius: 30,
+            padding: '8px 16px',
+            fontSize: 14,
+            cursor: 'pointer',
           }}
         >
           🗑
@@ -235,4 +265,3 @@ function MobileDrawer({ sessionId }) {
 }
 
 export default MobileDrawer;
-

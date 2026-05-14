@@ -1,60 +1,45 @@
-import MobileDrawer from './MobileDrawer.jsx';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import './App.css';
+import MobileDrawer from './MobileDrawer.jsx';
 import QRPanel from './QRPanel.jsx';
 import logger from './logger.js';
+import './App.css';
 
-// ─────────────────────────────────────────────
-// 1. CONFIGURATION — les secrets viennent du fichier .env
-//    Crée un fichier ".env" à la racine du projet avec :
-//    VITE_SUPABASE_URL=https://ton-projet.supabase.co
-//    VITE_SUPABASE_KEY=ta_cle_anon
-// ─────────────────────────────────────────────
+// ── 1. CONFIGURATION ──────────────────────────────────────
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY;
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// ─────────────────────────────────────────────
-// 2. LECTURE DU SESSION ID DANS L'URL
-//    Ex : http://localhost:5173/?session=abc123
-//    Si absent, on génère un id aléatoire pour cette session
-// ─────────────────────────────────────────────
+// ── 2. SESSION ID ─────────────────────────────────────────
 const getSessionId = () => {
   const params = new URLSearchParams(window.location.search);
   return params.get('session') || Math.random().toString(36).slice(2, 8);
 };
-
 const sessionId = getSessionId();
 
-// ─────────────────────────────────────────────
-// COMPOSANT PRINCIPAL
-// ─────────────────────────────────────────────
+// ── COMPOSANT PRINCIPAL ───────────────────────────────────
 function App() {
 
   // Détection mode mobile
-  const params = new URLSearchParams(window.location.search);
-  const isMobile = params.get('mode') === 'mobile';
+  const params     = new URLSearchParams(window.location.search);
+  const isMobile   = params.get('mode') === 'mobile';
   const urlSession = params.get('session');
 
   if (isMobile && urlSession) {
     return <MobileDrawer sessionId={urlSession} />;
   }
 
-  const canvasRef    = useRef(null);
-  const isDrawing    = useRef(false);
-  const pointQueue   = useRef([]);
-  const rafActive    = useRef(false);
-  const channelRef   = useRef(null);
+  const canvasRef  = useRef(null);
+  const isDrawing  = useRef(false);
+  const pointQueue = useRef([]);
+  const rafActive  = useRef(false);
+  const channelRef = useRef(null);
 
-  // États React
   const [color, setColor]           = useState('#ffffff');
   const [size, setSize]             = useState(3);
   const [connStatus, setConnStatus] = useState('connecting');
   const [eraserMode, setEraserMode] = useState(false);
 
-  // Refs pour accès dans les event listeners
   const colorRef  = useRef(color);
   const sizeRef   = useRef(size);
   const eraserRef = useRef(eraserMode);
@@ -63,26 +48,25 @@ function App() {
   useEffect(() => { sizeRef.current   = size;       }, [size]);
   useEffect(() => { eraserRef.current = eraserMode; }, [eraserMode]);
 
-  // ─────────────────────────────────────────────
-  // 3. NORMALISATION & DÉNORMALISATION
-  // ─────────────────────────────────────────────
+  // ── 3. NORMALISATION ──────────────────────────────────────
   const normalize = useCallback((clientX, clientY) => ({
     x: clientX / window.innerWidth,
     y: clientY / window.innerHeight,
   }), []);
 
-  const denormalize = useCallback((nx, ny, canvas) => ({
-    px: nx * (canvas.width  / (window.devicePixelRatio || 1)),
-    py: ny * (canvas.height / (window.devicePixelRatio || 1)),
-  }), []);
+  const denormalize = useCallback((nx, ny, canvas) => {
+    const dpr = window.devicePixelRatio || 1;
+    return {
+      px: nx * (canvas.width  / dpr),
+      py: ny * (canvas.height / dpr),
+    };
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx    = canvas.getContext('2d');
 
-    // ─────────────────────────────────────────────
-    // 4. DIMENSIONNER LE CANVAS (Smart TV + Retina)
-    // ─────────────────────────────────────────────
+    // ── 4. CANVAS SMART TV / RETINA ──────────────────────
     const resizeCanvas = () => {
       const dpr = window.devicePixelRatio || 1;
 
@@ -92,9 +76,7 @@ function App() {
       canvas.style.width  = window.innerWidth  + 'px';
       canvas.style.height = window.innerHeight + 'px';
 
-      // setTransform évite l'accumulation du scale à chaque resize
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
       ctx.lineCap  = 'round';
       ctx.lineJoin = 'round';
 
@@ -109,13 +91,10 @@ function App() {
     const observer = new ResizeObserver(() => resizeCanvas());
     observer.observe(canvas);
 
-    // ─────────────────────────────────────────────
-    // 5. BOUCLE DE RENDU — requestAnimationFrame
-    // ─────────────────────────────────────────────
+    // ── 5. BOUCLE RAF ────────────────────────────────────
     const renderLoop = () => {
       while (pointQueue.current.length > 0) {
         const pt = pointQueue.current.shift();
-
         const { px, py } = denormalize(pt.x ?? 0, pt.y ?? 0, canvas);
 
         if (pt.type === 'start') {
@@ -142,9 +121,7 @@ function App() {
       requestAnimationFrame(renderLoop);
     }
 
-    // ─────────────────────────────────────────────
-    // 6. CHANNEL SUPABASE REALTIME
-    // ─────────────────────────────────────────────
+    // ── 6. SUPABASE REALTIME ──────────────────────────────
     const channel = supabase
       .channel(`board-${sessionId}`)
       .on('broadcast', { event: 'draw' }, ({ payload }) => {
@@ -156,7 +133,7 @@ function App() {
           logger.info('Connecté au canal Supabase', {
             sessionId,
             screen: `${window.innerWidth}x${window.innerHeight}`,
-            dpr: window.devicePixelRatio,
+            dpr: window.devicePixelRatio || 1,
           });
         } else {
           logger.warn('Statut channel', { status });
@@ -165,11 +142,9 @@ function App() {
 
     channelRef.current = channel;
 
-    // ─────────────────────────────────────────────
-    // 7. FONCTION D'ENVOI D'UN POINT
-    // ─────────────────────────────────────────────
+    // ── 7. ENVOI D'UN POINT ───────────────────────────────
     const sendPoint = (type, clientX, clientY) => {
-      const normalized = (clientX !== undefined)
+      const normalized = clientX !== undefined
         ? normalize(clientX, clientY)
         : {};
 
@@ -184,42 +159,34 @@ function App() {
       channel.send({ type: 'broadcast', event: 'draw', payload });
     };
 
-    // ─────────────────────────────────────────────
-    // 8. ÉVÉNEMENTS SOURIS
-    // ─────────────────────────────────────────────
+    // ── 8. ÉVÉNEMENTS SOURIS ──────────────────────────────
     const onMouseDown = (e) => {
       isDrawing.current = true;
       sendPoint('start', e.clientX, e.clientY);
     };
-
     const onMouseMove = (e) => {
       if (!isDrawing.current) return;
       sendPoint('move', e.clientX, e.clientY);
     };
-
     const onMouseUp = () => {
       if (!isDrawing.current) return;
       isDrawing.current = false;
       sendPoint('end');
     };
 
-    // ─────────────────────────────────────────────
-    // 9. ÉVÉNEMENTS TACTILES
-    // ─────────────────────────────────────────────
+    // ── 9. ÉVÉNEMENTS TACTILES ────────────────────────────
     const onTouchStart = (e) => {
       e.preventDefault();
       isDrawing.current = true;
-      const touch = e.touches[0];
-      sendPoint('start', touch.clientX, touch.clientY);
+      const t = e.touches[0];
+      sendPoint('start', t.clientX, t.clientY);
     };
-
     const onTouchMove = (e) => {
       e.preventDefault();
       if (!isDrawing.current) return;
-      const touch = e.touches[0];
-      sendPoint('move', touch.clientX, touch.clientY);
+      const t = e.touches[0];
+      sendPoint('move', t.clientX, t.clientY);
     };
-
     const onTouchEnd = () => {
       if (!isDrawing.current) return;
       isDrawing.current = false;
@@ -233,9 +200,7 @@ function App() {
     window.addEventListener('touchmove',  onTouchMove,  { passive: false });
     window.addEventListener('touchend',   onTouchEnd);
 
-    // ─────────────────────────────────────────────
-    // 10. CLEANUP
-    // ─────────────────────────────────────────────
+    // ── 10. CLEANUP ───────────────────────────────────────
     return () => {
       window.removeEventListener('mousedown',  onMouseDown);
       window.removeEventListener('mousemove',  onMouseMove);
@@ -246,12 +211,9 @@ function App() {
       observer.disconnect();
       channel.unsubscribe();
     };
-
   }, []);
 
-  // ─────────────────────────────────────────────
-  // 11. BOUTON CLEAR synchronisé
-  // ─────────────────────────────────────────────
+  // ── 11. EFFACER TOUT ──────────────────────────────────
   const handleClear = useCallback(() => {
     const canvas = canvasRef.current;
     const ctx    = canvas.getContext('2d');
@@ -266,27 +228,28 @@ function App() {
     }
   }, []);
 
-  // ─────────────────────────────────────────────
-  // 12. RENDU JSX
-  // ─────────────────────────────────────────────
+  // ── 12. RENDU JSX ─────────────────────────────────────
   return (
     <>
-      {/* Badge de statut */}
+      {/* Badge statut */}
       <div className={`status-badge ${connStatus}`}>
-        {connStatus === 'connected' ? `● Session : ${sessionId}` : '○ Connexion…'}
+        {connStatus === 'connected'
+          ? `● Session : ${sessionId}`
+          : '○ Connexion…'}
       </div>
 
       {/* QR Code */}
       <QRPanel sessionId={sessionId} />
 
-      {/* Canvas de dessin */}
+      {/* Canvas */}
       <canvas
         ref={canvasRef}
         style={{ background: '#1a1a1a', width: '100vw', height: '100vh' }}
       />
 
-      {/* Barre d'outils */}
+      {/* Toolbar */}
       <div className="toolbar">
+
         <label>Couleur</label>
         <input
           type="color"
@@ -305,13 +268,17 @@ function App() {
           onChange={(e) => setSize(Number(e.target.value))}
         />
 
-        {/* Bouton Gomme */}
+        {/* Gomme */}
         <button
           className="btn-clear"
           style={{
-            background: eraserMode ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)',
+            background: eraserMode
+              ? 'rgba(255,255,255,0.2)'
+              : 'rgba(255,255,255,0.05)',
             color: 'white',
-            border: eraserMode ? '1px solid white' : '1px solid rgba(255,255,255,0.2)',
+            border: eraserMode
+              ? '1px solid white'
+              : '1px solid rgba(255,255,255,0.2)',
             marginRight: 8,
           }}
           onClick={() => setEraserMode(!eraserMode)}
@@ -319,24 +286,24 @@ function App() {
           {eraserMode ? '✏️ Dessiner' : '◻️ Gomme'}
         </button>
 
-        {/* Bouton Effacer tout */}
+        {/* Effacer tout */}
         <button className="btn-clear" onClick={handleClear}>
           🗑 Effacer
         </button>
 
-        {/* Bouton export logs */}
+        {/* Export logs */}
         <button
           className="btn-clear"
-          style={{ fontSize: 10, padding: '4px 10px', opacity: 0.5 }}
+          style={{ fontSize: 10, padding: '4px 10px', opacity: 0.6 }}
           onClick={() => logger.export()}
           title="Exporter les logs"
         >
           📋 Logs
         </button>
+
       </div>
     </>
   );
 }
 
 export default App;
-
