@@ -19,37 +19,57 @@ function MobileDrawer({ sessionId }) {
   const [size, setSize]             = useState(6);
   const [eraserMode, setEraserMode] = useState(false);
   const [connected, setConnected]   = useState(false);
+  const [isPortrait, setIsPortrait] = useState(
+    window.innerHeight > window.innerWidth
+  );
 
   useEffect(() => { colorRef.current  = color;      }, [color]);
   useEffect(() => { sizeRef.current   = size;       }, [size]);
   useEffect(() => { eraserRef.current = eraserMode; }, [eraserMode]);
 
+  // ── Détection orientation ─────────────────────────────
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx    = canvas.getContext('2d');
-
-    // Dimensionner le canvas selon l'écran actuel
-    const initCanvas = () => {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-      ctx.lineCap  = 'round';
-      ctx.lineJoin = 'round';
+    const checkOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
     };
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    return () => {
+      window.removeEventListener('resize', checkOrientation);
+      window.removeEventListener('orientationchange', checkOrientation);
+    };
+  }, []);
 
-    initCanvas();
+  // ── Tentative forçage paysage via API ─────────────────
+  useEffect(() => {
+    if (screen?.orientation?.lock) {
+      screen.orientation.lock('landscape').catch(() => {
+        // Refusé sur certains navigateurs — le message portrait prend le relais
+      });
+    }
+  }, []);
 
-    // ── Gestion rotation paysage/portrait ──────────────────
+  // ── Canvas + Supabase (seulement en paysage) ──────────
+  useEffect(() => {
+    if (isPortrait) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    ctx.lineCap  = 'round';
+    ctx.lineJoin = 'round';
+
     const handleResize = () => {
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
       canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
-
       ctx.putImageData(imageData, 0, 0);
       ctx.lineCap  = 'round';
       ctx.lineJoin = 'round';
-
-      logger.info('Rotation détectée', {
+      logger.info('Resize mobile', {
         orientation: window.innerWidth > window.innerHeight ? 'paysage' : 'portrait',
         size: `${window.innerWidth}x${window.innerHeight}`,
       });
@@ -57,7 +77,6 @@ function MobileDrawer({ sessionId }) {
 
     window.addEventListener('resize', handleResize);
 
-    // ── Canal Supabase ─────────────────────────────────────
     const channel = supabase
       .channel(`board-${sessionId}`)
       .subscribe((status) => {
@@ -69,26 +88,21 @@ function MobileDrawer({ sessionId }) {
 
     channelRef.current = channel;
 
-    // ── Normalisation ──────────────────────────────────────
     const normalize = (clientX, clientY) => ({
       x: clientX / window.innerWidth,
       y: clientY / window.innerHeight,
     });
 
-    // ── Envoi d'un point + dessin local ───────────────────
     const sendPoint = (type, clientX, clientY) => {
       const normalized = clientX !== undefined ? normalize(clientX, clientY) : {};
       const color = eraserRef.current ? '#1a1a1a' : colorRef.current;
       const size  = eraserRef.current ? sizeRef.current * 4 : sizeRef.current;
 
-      // Dessin local immédiat sur le téléphone
       if (type === 'start' && clientX !== undefined) {
         ctx.beginPath();
         ctx.moveTo(clientX, clientY);
         ctx.strokeStyle = color;
         ctx.lineWidth   = size;
-        ctx.lineCap     = 'round';
-        ctx.lineJoin    = 'round';
       } else if (type === 'move' && clientX !== undefined) {
         ctx.lineTo(clientX, clientY);
         ctx.stroke();
@@ -98,7 +112,6 @@ function MobileDrawer({ sessionId }) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
 
-      // Envoi vers le PC via Supabase
       channel.send({
         type: 'broadcast',
         event: 'draw',
@@ -106,7 +119,6 @@ function MobileDrawer({ sessionId }) {
       });
     };
 
-    // ── Événements tactiles ────────────────────────────────
     const onTouchStart = (e) => {
       e.preventDefault();
       isDrawing.current = true;
@@ -131,7 +143,6 @@ function MobileDrawer({ sessionId }) {
     canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
     canvas.addEventListener('touchend',   onTouchEnd);
 
-    // ── Cleanup ────────────────────────────────────────────
     return () => {
       canvas.removeEventListener('touchstart', onTouchStart);
       canvas.removeEventListener('touchmove',  onTouchMove);
@@ -139,14 +150,13 @@ function MobileDrawer({ sessionId }) {
       window.removeEventListener('resize',     handleResize);
       channel.unsubscribe();
     };
-  }, [sessionId]);
+  }, [sessionId, isPortrait]);
 
-  // ── Bouton effacer tout ────────────────────────────────
   const handleClear = () => {
     const canvas = canvasRef.current;
-    const ctx    = canvas.getContext('2d');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     if (channelRef.current) {
       channelRef.current.send({
         type: 'broadcast',
@@ -156,107 +166,122 @@ function MobileDrawer({ sessionId }) {
     }
   };
 
-  // ── Rendu ──────────────────────────────────────────────
+  // ── Écran portrait — message rotation ─────────────────
+  if (isPortrait) {
+    return (
+      <div style={{
+        width: '100vw', height: '100vh',
+        background: '#1a1a1a',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 24,
+      }}>
+        <div style={{ fontSize: 72 }}>🔄</div>
+        <p style={{
+          color: 'white', fontFamily: 'monospace',
+          fontSize: 18, textAlign: 'center',
+          padding: '0 32px', lineHeight: 1.8,
+        }}>
+          Tourne ton téléphone<br />en mode <strong>paysage</strong><br />pour dessiner
+        </p>
+        <p style={{ color: '#444', fontFamily: 'monospace', fontSize: 11 }}>
+          Session : {sessionId}
+        </p>
+      </div>
+    );
+  }
+
+  // ── Interface paysage ─────────────────────────────────
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#1a1a1a', position: 'relative', overflow: 'hidden' }}>
+    <div style={{
+      width: '100vw', height: '100vh',
+      background: '#1a1a1a',
+      position: 'relative', overflow: 'hidden',
+    }}>
 
       {/* Badge connexion */}
       <div style={{
-        position: 'fixed', top: 12, right: 12,
+        position: 'fixed', top: 10, right: 12,
         background: connected ? 'rgba(0,200,100,0.15)' : 'rgba(255,200,0,0.15)',
         color: connected ? '#00c864' : '#ffc800',
         border: `1px solid ${connected ? 'rgba(0,200,100,0.3)' : 'rgba(255,200,0,0.3)'}`,
-        borderRadius: 20, padding: '4px 12px',
-        fontSize: 11, fontFamily: 'monospace', zIndex: 100,
+        borderRadius: 20, padding: '4px 10px',
+        fontSize: 10, fontFamily: 'monospace', zIndex: 100,
       }}>
         {connected ? '● Connecté' : '○ Connexion…'}
       </div>
 
-      {/* Canvas plein écran */}
+      {/* Canvas */}
       <canvas
         ref={canvasRef}
-        style={{
-          display: 'block',
-          width: '100vw',
-          height: '100vh',
-          touchAction: 'none',
-        }}
+        style={{ display: 'block', width: '100vw', height: '100vh', touchAction: 'none' }}
       />
 
-      {/* Toolbar mobile compacte */}
+      {/* Toolbar */}
       <div style={{
-        position: 'fixed',
-        bottom: 24,
-        left: '50%',
+        position: 'fixed', bottom: 16, left: '50%',
         transform: 'translateX(-50%)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
+        display: 'flex', alignItems: 'center', gap: 10,
         background: 'rgba(20,20,20,0.92)',
         backdropFilter: 'blur(12px)',
         border: '1px solid rgba(255,255,255,0.12)',
-        borderRadius: 60,
-        padding: '12px 20px',
-        zIndex: 100,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        borderRadius: 50, padding: '10px 18px',
+        zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
       }}>
 
-        {/* Couleur */}
         <input
-          type="color"
-          value={color}
+          type="color" value={color}
           onChange={(e) => setColor(e.target.value)}
           style={{
-            width: 40, height: 40,
-            borderRadius: '50%',
+            width: 36, height: 36, borderRadius: '50%',
             border: '2px solid rgba(255,255,255,0.3)',
-            cursor: 'pointer',
-            padding: 0,
-            background: 'none',
+            cursor: 'pointer', padding: 0, background: 'none',
           }}
         />
 
-        {/* Épaisseur */}
         <input
-          type="range"
-          min={2}
-          max={30}
-          value={size}
+          type="range" min={2} max={30} value={size}
           onChange={(e) => setSize(Number(e.target.value))}
-          style={{ width: 80, accentColor: 'white' }}
+          style={{ width: 70, accentColor: 'white' }}
         />
 
-        {/* Gomme */}
         <button
           onClick={() => setEraserMode(!eraserMode)}
           style={{
             background: eraserMode ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.05)',
             color: 'white',
             border: `1px solid ${eraserMode ? 'white' : 'rgba(255,255,255,0.2)'}`,
-            borderRadius: 30,
-            padding: '8px 16px',
-            fontSize: 14,
-            cursor: 'pointer',
-            fontFamily: 'monospace',
+            borderRadius: 30, padding: '6px 14px',
+            fontSize: 13, cursor: 'pointer',
           }}
         >
           {eraserMode ? '✏️' : '◻️'}
         </button>
 
-        {/* Effacer tout */}
         <button
           onClick={handleClear}
           style={{
-            background: 'rgba(220,50,50,0.2)',
-            color: '#ff6b6b',
+            background: 'rgba(220,50,50,0.2)', color: '#ff6b6b',
             border: '1px solid rgba(220,50,50,0.4)',
-            borderRadius: 30,
-            padding: '8px 16px',
-            fontSize: 14,
-            cursor: 'pointer',
+            borderRadius: 30, padding: '6px 14px',
+            fontSize: 13, cursor: 'pointer',
           }}
         >
           🗑
+        </button>
+
+        <button
+          onClick={() => logger.export()}
+          title="Exporter les logs"
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            color: 'rgba(255,255,255,0.5)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 30, padding: '6px 10px',
+            fontSize: 11, cursor: 'pointer',
+          }}
+        >
+          📋
         </button>
 
       </div>
