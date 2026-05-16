@@ -43,9 +43,7 @@ function MobileDrawer({ sessionId }) {
   // ── Tentative forçage paysage via API ─────────────────
   useEffect(() => {
     if (screen?.orientation?.lock) {
-      screen.orientation.lock('landscape').catch(() => {
-        // Refusé sur certains navigateurs — le message portrait prend le relais
-      });
+      screen.orientation.lock('landscape').catch(() => {});
     }
   }, []);
 
@@ -168,23 +166,78 @@ function MobileDrawer({ sessionId }) {
 
   // ── Écran portrait — message rotation ─────────────────
   if (isPortrait) {
+    const currentUrl = window.location.href;
     return (
       <div style={{
         width: '100vw', height: '100vh',
         background: '#1a1a1a',
         display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
-        gap: 24,
+        gap: 20, padding: '0 24px', boxSizing: 'border-box',
       }}>
-        <div style={{ fontSize: 72 }}>🔄</div>
+        <div style={{ fontSize: 64 }}>🔄</div>
+
         <p style={{
           color: 'white', fontFamily: 'monospace',
-          fontSize: 18, textAlign: 'center',
-          padding: '0 32px', lineHeight: 1.8,
+          fontSize: 18, textAlign: 'center', lineHeight: 1.8,
+          margin: 0,
         }}>
           Tourne ton téléphone<br />en mode <strong>paysage</strong><br />pour dessiner
         </p>
-        <p style={{ color: '#444', fontFamily: 'monospace', fontSize: 11 }}>
+
+        {/* Instruction navigateur */}
+        <div style={{
+          background: 'rgba(255,200,0,0.1)',
+          border: '1px solid rgba(255,200,0,0.3)',
+          borderRadius: 12, padding: '12px 16px',
+          maxWidth: 300,
+        }}>
+          <p style={{
+            color: '#ffc800', fontFamily: 'monospace',
+            fontSize: 12, textAlign: 'center',
+            lineHeight: 1.6, margin: 0,
+          }}>
+            💡 Si tu viens de scanner un QR Code,<br />
+            ouvre ce lien dans <strong>Chrome</strong> ou <strong>Opera</strong><br />
+            pour que la rotation fonctionne.
+          </p>
+        </div>
+
+        {/* Bouton copier l'URL */}
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(currentUrl).then(() => {
+              alert('Lien copié ! Colle-le dans Chrome ou Opera.');
+            });
+          }}
+          style={{
+            background: 'rgba(255,255,255,0.1)',
+            color: 'white',
+            border: '1px solid rgba(255,255,255,0.3)',
+            borderRadius: 30, padding: '10px 20px',
+            fontSize: 13, fontFamily: 'monospace',
+            cursor: 'pointer',
+          }}
+        >
+          📋 Copier le lien
+        </button>
+
+        {/* Bouton continuer quand même */}
+        <button
+          onClick={() => setIsPortrait(false)}
+          style={{
+            background: 'rgba(255,255,255,0.05)',
+            color: 'rgba(255,255,255,0.5)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 30, padding: '8px 18px',
+            fontSize: 12, fontFamily: 'monospace',
+            cursor: 'pointer',
+          }}
+        >
+          Continuer en portrait →
+        </button>
+
+        <p style={{ color: '#333', fontFamily: 'monospace', fontSize: 10, margin: 0 }}>
           Session : {sessionId}
         </p>
       </div>
